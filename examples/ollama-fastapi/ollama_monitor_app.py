@@ -10,6 +10,7 @@ from typing import Any
 
 import httpx
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 
@@ -191,6 +192,7 @@ def create_app(service_name: str) -> FastAPI:
     ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
     model = os.getenv("OLLAMA_MODEL", "qwen3:0.6b")
     max_concurrency = int(os.getenv("MAX_CONCURRENCY", "1"))
+    cors_allow_origins = os.getenv("CORS_ALLOW_ORIGINS", "*")
 
     state = RuntimeState(
         service_name=service_name,
@@ -201,6 +203,17 @@ def create_app(service_name: str) -> FastAPI:
     state.semaphore = asyncio.Semaphore(state.max_concurrency)
 
     app = FastAPI(title=f"AMonitor Ollama Service - {service_name}")
+
+    allow_origins = [origin.strip() for origin in cors_allow_origins.split(",") if origin.strip()]
+    if not allow_origins:
+        allow_origins = ["*"]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allow_origins,
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     stop_event = asyncio.Event()
 

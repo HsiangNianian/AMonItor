@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"github.com/tailscale/hujson"
 )
 
 type Config struct {
@@ -77,7 +79,12 @@ func Load(path string) (Config, error) {
 		return Config{}, fmt.Errorf("read config failed: %w", err)
 	}
 
-	if err := json.Unmarshal(content, &cfg); err != nil {
+	standardized, err := hujson.Standardize(content)
+	if err != nil {
+		return Config{}, fmt.Errorf("parse config(json5) failed: %w", err)
+	}
+
+	if err := json.Unmarshal(standardized, &cfg); err != nil {
 		return Config{}, fmt.Errorf("parse config failed: %w", err)
 	}
 

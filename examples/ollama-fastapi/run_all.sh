@@ -28,7 +28,8 @@ PY
 
 OLLAMA_BASE_URL="$(read_cfg ollama.base_url)"
 OLLAMA_MODEL="$(read_cfg ollama.model)"
-AGENT_PANEL_WS="$(read_cfg agent.panel_ws)"
+AGENT_LISTEN_ADDR="$(read_cfg server.listen_addr)"
+AGENT_PANEL_PATH="$(read_cfg server.panel_path)"
 SVC_A_NAME="$(read_cfg services.0.name)"
 SVC_A_PORT="$(read_cfg services.0.port)"
 SVC_A_CONCURRENCY="$(read_cfg services.0.max_concurrency)"
@@ -37,21 +38,56 @@ SVC_B_PORT="$(read_cfg services.1.port)"
 SVC_B_CONCURRENCY="$(read_cfg services.1.max_concurrency)"
 PANEL_PORT="$(read_cfg panel.port)"
 PANEL_DEFAULT_API_BASE="$(read_cfg panel.defaultApiBase)"
-PANEL_TARGETS_JSON="$(/usr/bin/python3 - "$CONFIG_PATH" <<'PY'
+PANEL_DEFAULT_WS="$(/usr/bin/python3 - "$CONFIG_PATH" <<'PY'
 import json,sys
 from pathlib import Path
+
 cfg = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
-targets = cfg.get('agent', {}).get('targets', {})
+server = cfg.get('server', {})
+listen_addr = str(server.get('listen_addr', '')).strip()
+panel_path = str(server.get('panel_path', '/ws/panel')).strip() or '/ws/panel'
+
+if not listen_addr:
+  raise SystemExit('')
+
+if listen_addr.startswith(':'):
+  listen_addr = '127.0.0.1' + listen_addr
+elif listen_addr.startswith('0.0.0.0:'):
+  listen_addr = '127.0.0.1:' + listen_addr.split(':', 1)[1]
+
+if not panel_path.startswith('/'):
+  panel_path = '/' + panel_path
+
+print(f"ws://{listen_addr}{panel_path}")
+PY
+  )"
+PANEL_TARGETS_JSON="$(/usr/bin/python3 - "$CONFIG_PATH" <<'PY'
+import json,sys
+from urllib.parse import urlparse
+from pathlib import Path
+cfg = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+
+def ws_to_http_base(raw_url: str) -> str:
+  parsed = urlparse(raw_url)
+  if not parsed.scheme or not parsed.netloc:
+    return ''
+  scheme = 'https' if parsed.scheme == 'wss' else 'http'
+  return f"{scheme}://{parsed.netloc}"
+
+routes = cfg.get('routes', [])
 out = {}
-for key, value in targets.items():
-  if isinstance(value, str):
-    out[key] = {"target_id": key, "target_url": value}
-  elif isinstance(value, dict):
-    out[key] = {
-      "target_id": key,
-      "target_url": value.get('ws', ''),
-      "api_base": value.get('api_base', '')
-    }
+for item in routes:
+  if not isinstance(item, dict):
+    continue
+  target_id = str(item.get('target_id', '')).strip()
+  target_url = str(item.get('url', '')).strip()
+  if not target_id or not target_url:
+    continue
+  out[target_id] = {
+    "target_id": target_id,
+    "target_url": target_url,
+    "api_base": ws_to_http_base(target_url)
+  }
 print(json.dumps(out, ensure_ascii=False))
 PY
   )"
@@ -59,11 +95,10 @@ PY
 export VITE_PANEL_DEFAULT_API_BASE="$PANEL_DEFAULT_API_BASE"
 export VITE_PANEL_TARGETS_JSON="$PANEL_TARGETS_JSON"
 
-if [ -z "$AGENT_PANEL_WS" ]; then
-  echo "config error: agent.panel_ws is required"
+if [ -z "$PANEL_DEFAULT_WS" ]; then
+  echo "config error: server.listen_addr/server.panel_path is required"
   exit 1
 fi
-PANEL_DEFAULT_WS="$AGENT_PANEL_WS"
 export PANEL_DEFAULT_WS
 export VITE_PANEL_DEFAULT_WS="$PANEL_DEFAULT_WS"
 

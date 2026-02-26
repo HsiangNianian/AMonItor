@@ -5,6 +5,7 @@ go 1.23
 require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/redis/go-redis/v9 v9.7.0
+	github.com/tailscale/hujson v0.0.0-20250605163823-992244df8c5a
 )
 
 require (

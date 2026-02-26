@@ -1,18 +1,32 @@
 {
-  "agent": {
-    "panel_ws": "ws://127.0.0.1:8080/ws/panel",
-    "targets": {
-      "ollama-svc-a": {
-        "ws": "ws://127.0.0.1:8011/ws/monitor",
-        "api_base": "http://127.0.0.1:8011"
-      },
-      "ollama-svc-b": {
-        "ws": "ws://127.0.0.1:8012/ws/monitor",
-        "api_base": "http://127.0.0.1:8012"
-      }
-    }
+  "server": { // Agent 作为ws服务端的配置
+    "enabled": true,
+    "listen_addr": "127.0.0.1:8080",
+    "panel_path": "/ws/panel",
+    "panel_auth_token": "", // 面板连接认证token，留空表示不启用认证
+    "default_sdk_auth_token": "" // SDK连接认证token，留空表示不启用认证
   },
-  "ollama": {
+  "store": { // 存储配置，目前仅支持redis
+    "redis_addr": ""
+  },
+  "routes": [ // Agent的路由配置，定义了Agent如何连接和识别SDK实例
+    {
+      "target_id": "ollama-svc-a", // 目标ID，用于标识SDK实例，必须唯一，且应与SDK实例配置中的target_id一致
+      "url": "ws://127.0.0.1:8011/ws/monitor",
+      "auth_token": "" // SDK连接认证token，留空表示不启用认证， 优先级高于default_sdk_auth_token
+    },
+    {
+      "target_id": "ollama-svc-b",
+      "url": "ws://127.0.0.1:8012/ws/monitor",
+      "auth_token": ""
+    }
+  ],
+  "client": { // Agent 作为ws客户端连接SDK服务器的配置
+    "enabled": true,
+    "reconnect_interval_seconds": 5,
+    "upstreams": []
+  },
+  "ollama": { // Ollama服务配置
     "base_url": "http://127.0.0.1:11434",
     "model": "qwen3:0.6b"
   },

@@ -34,6 +34,18 @@ bash examples/ollama-fastapi/run_all.sh
 
 说明：脚本会直接复用 `python-sdk` 的 `uv` 项目环境运行 Python 服务，不会在 `examples/ollama-fastapi` 目录创建新的虚拟环境。
 
+默认已开启 CORS（支持浏览器 `OPTIONS` 预检）。如果要限制来源，可在启动服务前设置：
+
+```bash
+export CORS_ALLOW_ORIGINS=http://127.0.0.1:5174,http://localhost:5174
+```
+
+说明：`examples/ollama-fastapi/config.json` 已与 Agent 配置结构对齐，同一份配置可以直接用于 Agent：
+
+```bash
+go run ./agent/cmd/agent --config ./examples/ollama-fastapi/config.json
+```
+
 启动后可访问：
 
 - 服务 A 文档：`http://127.0.0.1:8011/docs`
@@ -84,7 +96,7 @@ curl -X POST http://127.0.0.1:8011/api/action \
 
 ## 面板交互
 
-1. 在面板输入 Agent WS 地址（默认来自 `agent.panel_ws`）
+1. 在面板输入 Agent WS 地址（默认来自 `server.listen_addr + server.panel_path`）
 2. 通过“选择目标服务”下拉自动填充 `target_id/target_url/apiBase`
 3. 点击“连接”
 4. 右侧实时展示：
@@ -104,28 +116,30 @@ WS 地址示例（面板固定连接 Agent）：
 
 编辑 `config.json` 可修改：
 
-- `agent.panel_ws`：面板连接 Agent 的 WS 地址（例如内网机器）
-- `agent.targets`：服务名到目标 `target_url` 映射（给 action 转发使用）
+- `server.listen_addr` 与 `server.panel_path`：Agent 面板入口
+- `routes[]`：目标服务路由（`target_id -> url(+auth_token)`）
+- `client.upstreams[]`：可选，Agent 主动连接多个上游服务
 - Ollama 地址与模型
 - 两个服务端口
 - 并发数
 - 面板端口、默认 API Base
 
-`run_all.sh` 始终使用 `agent.panel_ws` 作为面板默认 WS。
+`run_all.sh` 始终使用 `server.listen_addr + server.panel_path` 作为面板默认 WS。
 
 ### Agent 在内网其他机器时
 
 如果你的 Agent 二进制部署在别的机器：
 
-1. 配置 `agent.panel_ws` 为 Agent 的对外地址
-2. 填写 `target_id` 与 `target_url`（可直接用 `agent.targets` 的映射值）
+1. 配置 `server.listen_addr` 为 Agent 的对外地址，`server.panel_path` 为面板入口路径
+2. 填写 `target_id` 与 `target_url`（可直接用 `routes[]` 的映射值）
 3. `API Base` 填真实 Python 服务地址（用于 `/api/generate`）
 
 注意：选择目标服务只会自动填写 `target_id/target_url/apiBase`，不会覆盖你已经填写的 Agent `WS` 地址。
 
 示例：
 
-- `agent.panel_ws = ws://10.0.0.9:8080/ws/panel`
+- `server.listen_addr = 10.0.0.9:8080`
+- `server.panel_path = /ws/panel`
 - `actionTargetId = ollama-svc-a`
 - `actionTargetUrl = ws://10.0.0.21:8011/ws/monitor`
 - `apiBaseUrl = http://10.0.0.21:8011`
