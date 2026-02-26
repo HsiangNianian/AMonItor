@@ -30,6 +30,6 @@ jobs:
       - name: Sync
         run: uv sync
       - name: Lint
-        run: uv run --with dev ruff check src
+        run: uvx ruff check src
       - name: Smoke
         run: uv run python -c "import amonitor_sdk"
