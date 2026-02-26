@@ -14,6 +14,7 @@ AMonitor 是一个 Monorepo 监控系统，包含：
 - `docs/` 设计与使用文档
 - `scripts/` 构建与工具脚本
 - `tests/e2e/` 端到端联调说明
+- `tests/` 本地联调脚本（Textual 面板与最小 SDK 服务端）
 
 ## 运行环境
 
@@ -132,6 +133,18 @@ bash examples/ollama-fastapi/run_all.sh
 ```
 
 配置文件在 `examples/config.json`，多实例演示使用 `examples/config.multi.json`，压力演示使用 `examples/config.stress.json`。
+
+## tests 本地联调脚本
+
+- `tests/tui_panel.py`：Textual TUI 面板，支持 `/connect` `/disconnect` `/chat` `/send`。
+- `tests/simple_sdk_server.py`：手写协议版最小 SDK 服务端（教学/对照用）。
+- `tests/simple_sdk_server_with_sdk.py`：基于 `python-sdk` 的最小 SDK 服务端（推荐）。
+
+示例：启动 SDK 版最小服务端
+
+```bash
+python tests/simple_sdk_server_with_sdk.py --host 127.0.0.1 --port 8013 --service-name ollama-svc-b
+```
 
 ## 文档索引
 
