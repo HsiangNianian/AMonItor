@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: proto lint test build-agent build-sdk release-dry-run
+.PHONY: proto lint test test-dedupe demo demo-multi build-agent build-sdk release-dry-run
 
 proto:
 	@echo "[proto] place generator command in scripts/gen_proto.sh"
@@ -17,6 +17,21 @@ test:
 	@cd agent && go test ./...
 	@echo "[test] python smoke"
 	@cd python-sdk && uv run python -c "import amonitor_sdk"
+	@if [ "$$RUN_E2E" = "1" ]; then \
+		echo "[test] e2e dedupe"; \
+		$(MAKE) test-dedupe; \
+	else \
+		echo "[test] e2e dedupe skipped (set RUN_E2E=1 to enable)"; \
+	fi
+
+test-dedupe:
+	@cd python-sdk && env -u ALL_PROXY -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy NO_PROXY=127.0.0.1,localhost uv run python ../scripts/test_dedupe_once.py
+
+demo:
+	@bash examples/run.sh
+
+demo-multi:
+	@bash examples/run.multi.sh
 
 build-agent:
 	@mkdir -p dist

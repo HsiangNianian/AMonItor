@@ -1,0 +1,26 @@
+{
+  "agent": {
+    "listen_addr": "127.0.0.1:8080",
+    "panel_ws": "ws://127.0.0.1:8080/ws/panel"
+  },
+  "sdk_instances": [
+    {
+      "name": "sdk-a",
+      "target_id": "demo-target-a",
+      "host": "127.0.0.1",
+      "port": 8765,
+      "heartbeat_interval": 5
+    },
+    {
+      "name": "sdk-b",
+      "target_id": "demo-target-b",
+      "host": "127.0.0.1",
+      "port": 8766,
+      "heartbeat_interval": 5
+    }
+  ],
+  "panel": {
+    "send_actions_on_connect": true,
+    "action_name": "restart"
+  }
+}
