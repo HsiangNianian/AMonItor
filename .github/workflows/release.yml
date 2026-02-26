@@ -34,10 +34,23 @@ jobs:
         run: |
           mkdir -p ../dist
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags "-s -w" -o ../dist/${{ matrix.output }} ./cmd/agent
+      - name: Package
+        id: package
+        run: |
+          cd dist
+          VERSION="${{ github.ref_name }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            ARCHIVE="amonitor-agent-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.zip"
+            zip -j "${ARCHIVE}" "${{ matrix.output }}"
+          else
+            ARCHIVE="amonitor-agent-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz"
+            tar -czf "${ARCHIVE}" "${{ matrix.output }}"
+          fi
+          echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.output }}
-          path: dist/${{ matrix.output }}
+          name: ${{ steps.package.outputs.archive }}
+          path: dist/${{ steps.package.outputs.archive }}
 
   release:
     needs: build-agent
@@ -49,14 +62,15 @@ jobs:
           path: dist
       - name: Flatten artifacts
         run: |
-          find dist -type f -name "amonitor-agent-*" -exec mv {} dist/ \;
+          find dist -mindepth 2 -type f \( -name "amonitor-agent-*.tar.gz" -o -name "amonitor-agent-*.zip" \) -exec mv {} dist/ \;
       - name: Checksums
         run: |
           cd dist
-          sha256sum amonitor-agent-* > SHA256SUMS
+          sha256sum amonitor-agent-*.tar.gz amonitor-agent-*.zip > SHA256SUMS
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/amonitor-agent-*
+            dist/amonitor-agent-*.tar.gz
+            dist/amonitor-agent-*.zip
             dist/SHA256SUMS

@@ -122,6 +122,7 @@ SDK_COUNT=20 make demo-scale
 - 协议说明：[docs/protocol.md](docs/protocol.md)
 - 发布说明：[docs/release.md](docs/release.md)
 - 部署说明：[docs/deploy.md](docs/deploy.md)
+- Ubuntu 从零部署：[docs/ubuntu-from-scratch.md](docs/ubuntu-from-scratch.md)
 - SDK 规范：[python-sdk/README.md](python-sdk/README.md)
 - 示例说明：[examples/README.md](examples/README.md)
 
