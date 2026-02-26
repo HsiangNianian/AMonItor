@@ -46,7 +46,7 @@ async def on_action(action: str, params: dict[str, Any]) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Simple SDK server powered by amonitor-sdk")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8013)
+    parser.add_argument("--port", type=int, default=8012)
     parser.add_argument("--service-name", default="ollama-svc-b")
     parser.add_argument("--auth-token", default="")
     parser.add_argument("--heartbeat-interval", type=int, default=2)
