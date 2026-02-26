@@ -1,0 +1,18 @@
+# Go
+agent/bin/
+agent/dist/
+
+# Python
+__pycache__/
+*.pyc
+.python-version
+.venv/
+
+# Build artifacts
+dist/
+coverage/
+
+# IDE
+.vscode/
+
+PLAN.md

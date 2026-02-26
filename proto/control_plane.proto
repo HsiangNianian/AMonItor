@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package amonitor.control.v1;
+
+option go_package = "github.com/HsiangNianian/AMonItor/proto/gen/go/controlv1;controlv1";
+
+message Envelope {
+  string msg_id = 1;
+  string trace_id = 2;
+  string type = 3;
+  string target_id = 4;
+  int64 timestamp = 5;
+  bytes payload = 6;
+}
+
+message RegisterPayload {
+  string target_id = 1;
+  string sdk_url = 2;
+  map<string, string> metadata = 3;
+}
+
+message HeartbeatPayload {
+  string target_id = 1;
+  map<string, string> metrics = 2;
+}
+
+message EventPayload {
+  string target_id = 1;
+  string event_name = 2;
+  bytes data = 3;
+}
+
+message ActionPayload {
+  string action = 1;
+  bytes params = 2;
+  string target_url = 3;
+}
+
+message ActionAckPayload {
+  string action_msg_id = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+message ErrorPayload {
+  string code = 1;
+  string message = 2;
+}

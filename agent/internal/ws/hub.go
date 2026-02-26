@@ -1,0 +1,233 @@
+package ws
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"log"
+	"net/http"
+	"sync"
+	"time"
+
+	"github.com/HsiangNianian/AMonItor/agent/internal/protocol"
+	"github.com/HsiangNianian/AMonItor/agent/internal/store"
+	"github.com/gorilla/websocket"
+)
+
+type clientConn struct {
+	conn *websocket.Conn
+	mu   sync.Mutex
+}
+
+func (c *clientConn) WriteJSON(v any) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.conn.WriteJSON(v)
+}
+
+type Hub struct {
+	store     store.Store
+	authToken string
+	sdkToken  string
+
+	upgrader websocket.Upgrader
+
+	panelMu sync.RWMutex
+	panels  map[*clientConn]struct{}
+
+	sdkMu sync.RWMutex
+	sdks  map[string]*clientConn
+}
+
+func NewHub(st store.Store, authToken, sdkToken string) *Hub {
+	return &Hub{
+		store:     st,
+		authToken: authToken,
+		sdkToken:  sdkToken,
+		upgrader: websocket.Upgrader{
+			CheckOrigin: func(_ *http.Request) bool { return true },
+		},
+		panels: make(map[*clientConn]struct{}),
+		sdks:   make(map[string]*clientConn),
+	}
+}
+
+func (h *Hub) HandlePanel(w http.ResponseWriter, r *http.Request) {
+	if h.authToken != "" && r.Header.Get("Authorization") != "Bearer "+h.authToken {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	conn, err := h.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("upgrade panel ws failed: %v", err)
+		return
+	}
+	client := &clientConn{conn: conn}
+
+	h.panelMu.Lock()
+	h.panels[client] = struct{}{}
+	h.panelMu.Unlock()
+
+	log.Printf("panel connected: %s", r.RemoteAddr)
+	h.readPanel(client)
+}
+
+func (h *Hub) readPanel(client *clientConn) {
+	defer func() {
+		h.panelMu.Lock()
+		delete(h.panels, client)
+		h.panelMu.Unlock()
+		_ = client.conn.Close()
+	}()
+
+	for {
+		var env protocol.Envelope
+		if err := client.conn.ReadJSON(&env); err != nil {
+			return
+		}
+		if env.Type != "action" {
+			continue
+		}
+		if err := h.handleAction(context.Background(), env); err != nil {
+			log.Printf("handle action failed: %v", err)
+			h.broadcast(protocol.Envelope{
+				MsgID:     env.MsgID,
+				TraceID:   env.TraceID,
+				Type:      "error",
+				TargetID:  env.TargetID,
+				Timestamp: time.Now().UnixMilli(),
+				Payload:   mustJSON(map[string]string{"code": "ACTION_FORWARD_FAILED", "message": err.Error()}),
+			})
+		}
+	}
+}
+
+func (h *Hub) handleAction(ctx context.Context, env protocol.Envelope) error {
+	if env.MsgID == "" {
+		return errors.New("missing msg_id")
+	}
+
+	seen, err := h.store.IsProcessed(ctx, env.MsgID)
+	if err != nil {
+		return err
+	}
+	if seen {
+		ack := protocol.Envelope{
+			MsgID:     env.MsgID,
+			TraceID:   env.TraceID,
+			Type:      "action_ack",
+			TargetID:  env.TargetID,
+			Timestamp: time.Now().UnixMilli(),
+			Payload: mustJSON(protocol.ActionAckPayload{
+				ActionMsgID: env.MsgID,
+				Success:     true,
+				Message:     "duplicate ignored",
+			}),
+		}
+		h.broadcast(ack)
+		return nil
+	}
+
+	var payload protocol.ActionPayload
+	if err := json.Unmarshal(env.Payload, &payload); err != nil {
+		return err
+	}
+
+	targetURL := payload.TargetURL
+	if targetURL == "" && env.TargetID != "" {
+		targetURL, err = h.store.GetRoute(ctx, env.TargetID)
+		if err != nil {
+			return err
+		}
+	}
+	if targetURL == "" {
+		return errors.New("missing target url")
+	}
+
+	sdkConn, err := h.ensureSDKConn(ctx, env.TargetID, targetURL)
+	if err != nil {
+		return err
+	}
+
+	if err := sdkConn.WriteJSON(env); err != nil {
+		return err
+	}
+	if err := h.store.MarkProcessed(ctx, env.MsgID, 24*time.Hour); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (h *Hub) ensureSDKConn(ctx context.Context, targetID, targetURL string) (*clientConn, error) {
+	h.sdkMu.RLock()
+	if conn, ok := h.sdks[targetID]; ok {
+		h.sdkMu.RUnlock()
+		return conn, nil
+	}
+	h.sdkMu.RUnlock()
+
+	header := http.Header{}
+	if h.sdkToken != "" {
+		header.Set("Authorization", "Bearer "+h.sdkToken)
+	}
+	conn, _, err := websocket.DefaultDialer.DialContext(ctx, targetURL, header)
+	if err != nil {
+		return nil, err
+	}
+	client := &clientConn{conn: conn}
+
+	h.sdkMu.Lock()
+	h.sdks[targetID] = client
+	h.sdkMu.Unlock()
+
+	if targetID != "" {
+		_ = h.store.SetRoute(ctx, targetID, targetURL)
+	}
+
+	go h.readSDK(targetID, client)
+	return client, nil
+}
+
+func (h *Hub) readSDK(targetID string, client *clientConn) {
+	defer func() {
+		h.sdkMu.Lock()
+		if cur, ok := h.sdks[targetID]; ok && cur == client {
+			delete(h.sdks, targetID)
+		}
+		h.sdkMu.Unlock()
+		_ = client.conn.Close()
+	}()
+
+	for {
+		var env protocol.Envelope
+		if err := client.conn.ReadJSON(&env); err != nil {
+			return
+		}
+		if env.Type == "register" {
+			var p protocol.RegisterPayload
+			if err := json.Unmarshal(env.Payload, &p); err == nil && p.TargetID != "" && p.SDKURL != "" {
+				_ = h.store.SetRoute(context.Background(), p.TargetID, p.SDKURL)
+			}
+		}
+		if env.Type == "action_ack" {
+			_ = h.store.SetAckStatus(context.Background(), env.MsgID, "done", 24*time.Hour)
+		}
+		h.broadcast(env)
+	}
+}
+
+func (h *Hub) broadcast(env protocol.Envelope) {
+	h.panelMu.RLock()
+	defer h.panelMu.RUnlock()
+	for panel := range h.panels {
+		if err := panel.WriteJSON(env); err != nil {
+			log.Printf("broadcast to panel failed: %v", err)
+		}
+	}
+}
+
+func mustJSON(v any) json.RawMessage {
+	b, _ := json.Marshal(v)
+	return b
+}
