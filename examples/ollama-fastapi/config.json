@@ -1,19 +1,19 @@
 {
-  "server": { // Agent 作为ws服务端的配置
+  "server": { // Agent 作为 WS 服务端的配置（面板入口）
     "enabled": true,
     "listen_addr": "127.0.0.1:8080",
-    "panel_path": "/ws/panel",
-    "panel_auth_token": "", // 面板连接认证token，留空表示不启用认证
-    "default_sdk_auth_token": "" // SDK连接认证token，留空表示不启用认证
+    "panel_path": "/ws/panel", // 面板连接路径；面板完整地址=ws://listen_addr + panel_path
+    "panel_auth_token": "", // 面板连接鉴权 token，留空表示不鉴权
+    "default_sdk_auth_token": "" // Agent 连接目标 SDK 时的默认鉴权 token；可被 routes[].auth_token 覆盖
   },
-  "store": { // 存储配置，目前仅支持redis
+  "store": { // 存储配置（为空时使用内存存储；填 Redis 可跨实例共享路由/幂等状态）
     "redis_addr": ""
   },
-  "routes": [ // Agent的路由配置，定义了Agent如何连接和识别SDK实例
+  "routes": [ // Agent 路由表：定义 target_id -> SDK WS 地址
     {
-      "target_id": "ollama-svc-a", // 目标ID，用于标识SDK实例，必须唯一，且应与SDK实例配置中的target_id一致
+      "target_id": "ollama-svc-a", // 目标 ID（必须唯一）；面板发送 action 时的 target_id 要与这里一致
       "url": "ws://127.0.0.1:8011/ws/monitor",
-      "auth_token": "" // SDK连接认证token，留空表示不启用认证， 优先级高于default_sdk_auth_token
+      "auth_token": "" // 当前路由专用 token；留空表示使用 default_sdk_auth_token（若也为空则不鉴权）
     },
     {
       "target_id": "ollama-svc-b",
@@ -21,12 +21,12 @@
       "auth_token": ""
     }
   ],
-  "client": { // Agent 作为ws客户端连接SDK服务器的配置
+  "client": { // Agent 主动作为 WS 客户端维护上游连接的配置（可选）
     "enabled": true,
     "reconnect_interval_seconds": 5,
-    "upstreams": []
+    "upstreams": [] // 常驻上游列表；当 enabled=true 且为空时，会自动回退使用 routes 建立常驻连接
   },
-  "ollama": { // Ollama服务配置
+  "ollama": { // Ollama 服务配置（供示例 FastAPI 服务调用）
     "base_url": "http://127.0.0.1:11434",
     "model": "qwen3:0.6b"
   },
@@ -42,8 +42,8 @@
       "max_concurrency": 1
     }
   ],
-  "panel": {
+  "panel": { // 面板本地启动配置
     "port": 5174,
-    "defaultApiBase": "http://127.0.0.1:8011"
+    "defaultApiBase": "http://127.0.0.1:8011" // 面板“调用 /api/generate”按钮的默认 HTTP 基地址
   }
 }

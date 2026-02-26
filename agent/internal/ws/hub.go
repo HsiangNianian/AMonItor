@@ -110,6 +110,7 @@ func (h *Hub) StartManagedUpstream(ctx context.Context, targetID, targetURL, aut
 
 func (h *Hub) HandlePanel(w http.ResponseWriter, r *http.Request) {
 	if h.authToken != "" && r.Header.Get("Authorization") != "Bearer "+h.authToken {
+		log.Printf("panel unauthorized: remote=%s", r.RemoteAddr)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -123,9 +124,10 @@ func (h *Hub) HandlePanel(w http.ResponseWriter, r *http.Request) {
 
 	h.panelMu.Lock()
 	h.panels[client] = struct{}{}
+	panelCount := len(h.panels)
 	h.panelMu.Unlock()
 
-	log.Printf("panel connected: %s", r.RemoteAddr)
+	log.Printf("panel connected: remote=%s active_panels=%d", r.RemoteAddr, panelCount)
 	h.readPanel(client)
 }
 
@@ -133,28 +135,35 @@ func (h *Hub) readPanel(client *clientConn) {
 	defer func() {
 		h.panelMu.Lock()
 		delete(h.panels, client)
+		panelCount := len(h.panels)
 		h.panelMu.Unlock()
 		_ = client.conn.Close()
+		log.Printf("panel disconnected: active_panels=%d", panelCount)
 	}()
 
 	for {
 		var env protocol.Envelope
 		if err := client.conn.ReadJSON(&env); err != nil {
+			log.Printf("recv panel->agent failed: %v", err)
 			return
 		}
+		h.logEvent("recv panel->agent", env)
 		if env.Type != "action" {
+			log.Printf("ignore non-action from panel: type=%s msg_id=%s target_id=%s", env.Type, env.MsgID, env.TargetID)
 			continue
 		}
 		if err := h.handleAction(context.Background(), env); err != nil {
 			log.Printf("handle action failed: %v", err)
-			h.broadcast(protocol.Envelope{
+			errEnv := protocol.Envelope{
 				MsgID:     env.MsgID,
 				TraceID:   env.TraceID,
 				Type:      "error",
 				TargetID:  env.TargetID,
 				Timestamp: time.Now().UnixMilli(),
 				Payload:   mustJSON(map[string]string{"code": "ACTION_FORWARD_FAILED", "message": err.Error()}),
-			})
+			}
+			h.logEvent("send agent->panel(error)", errEnv)
+			h.broadcast(errEnv)
 		}
 	}
 }
@@ -181,6 +190,7 @@ func (h *Hub) handleAction(ctx context.Context, env protocol.Envelope) error {
 				Message:     "duplicate ignored",
 			}),
 		}
+		h.logEvent("send agent->panel(action_ack duplicate)", ack)
 		h.broadcast(ack)
 		return nil
 	}
@@ -200,6 +210,7 @@ func (h *Hub) handleAction(ctx context.Context, env protocol.Envelope) error {
 	if targetURL == "" {
 		return errors.New("missing target url")
 	}
+	log.Printf("resolve route: target_id=%s target_url=%s msg_id=%s", env.TargetID, targetURL, env.MsgID)
 
 	sdkConn, err := h.ensureSDKConn(ctx, env.TargetID, targetURL, h.getRouteAuthToken(env.TargetID))
 	if err != nil {
@@ -209,6 +220,7 @@ func (h *Hub) handleAction(ctx context.Context, env protocol.Envelope) error {
 	if err := sdkConn.WriteJSON(env); err != nil {
 		return err
 	}
+	h.logEvent("send agent->sdk", env)
 	if err := h.store.MarkProcessed(ctx, env.MsgID, 24*time.Hour); err != nil {
 		return err
 	}
@@ -230,10 +242,12 @@ func (h *Hub) ensureSDKConn(ctx context.Context, targetID, targetURL, authToken 
 	if authToken != "" {
 		header.Set("Authorization", "Bearer "+authToken)
 	}
+	log.Printf("dial sdk: target_id=%s target_url=%s", targetID, targetURL)
 	conn, _, err := websocket.DefaultDialer.DialContext(ctx, targetURL, header)
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("sdk connected: target_id=%s target_url=%s", targetID, targetURL)
 	client := &clientConn{conn: conn}
 
 	h.sdkMu.Lock()
@@ -259,29 +273,37 @@ func (h *Hub) readSDK(targetID string, client *clientConn) {
 		}
 		h.sdkMu.Unlock()
 		_ = client.conn.Close()
+		log.Printf("sdk disconnected: target_id=%s", targetID)
 	}()
 
 	for {
 		var env protocol.Envelope
 		if err := client.conn.ReadJSON(&env); err != nil {
+			log.Printf("recv sdk->agent failed: target_id=%s err=%v", targetID, err)
 			return
 		}
+		h.logEvent("recv sdk->agent", env)
 		if env.Type == "register" {
 			var p protocol.RegisterPayload
 			if err := json.Unmarshal(env.Payload, &p); err == nil && p.TargetID != "" && p.SDKURL != "" {
 				_ = h.store.SetRoute(context.Background(), p.TargetID, p.SDKURL)
+				log.Printf("register route from sdk: target_id=%s sdk_url=%s", p.TargetID, p.SDKURL)
 			}
 		}
 		if env.Type == "action_ack" {
 			_ = h.store.SetAckStatus(context.Background(), env.MsgID, "done", 24*time.Hour)
+			log.Printf("ack status updated: msg_id=%s target_id=%s", env.MsgID, env.TargetID)
 		}
+		h.logEvent("send agent->panel(broadcast)", env)
 		h.broadcast(env)
 	}
 }
 
 func (h *Hub) broadcast(env protocol.Envelope) {
 	h.panelMu.RLock()
+	panelCount := len(h.panels)
 	defer h.panelMu.RUnlock()
+	log.Printf("broadcast to panels: count=%d type=%s msg_id=%s target_id=%s", panelCount, env.Type, env.MsgID, env.TargetID)
 	for panel := range h.panels {
 		if err := panel.WriteJSON(env); err != nil {
 			log.Printf("broadcast to panel failed: %v", err)
@@ -298,4 +320,8 @@ func (h *Hub) getRouteAuthToken(targetID string) string {
 	h.routeMu.RLock()
 	defer h.routeMu.RUnlock()
 	return h.routeAuthToken[targetID]
+}
+
+func (h *Hub) logEvent(prefix string, env protocol.Envelope) {
+	log.Printf("%s: type=%s msg_id=%s trace_id=%s target_id=%s timestamp=%d", prefix, env.Type, env.MsgID, env.TraceID, env.TargetID, env.Timestamp)
 }

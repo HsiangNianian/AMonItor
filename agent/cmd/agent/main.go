@@ -168,7 +168,24 @@ func main() {
 
 	if cfg.Client.Enabled {
 		reconnect := time.Duration(cfg.Client.ReconnectIntervalSeconds) * time.Second
-		for _, upstream := range cfg.Client.Upstreams {
+		upstreams := cfg.Client.Upstreams
+		if len(upstreams) == 0 {
+			for _, route := range cfg.Routes {
+				if route.TargetID == "" || route.URL == "" {
+					continue
+				}
+				upstreams = append(upstreams, config.Upstream{
+					TargetID:  route.TargetID,
+					URL:       route.URL,
+					AuthToken: route.AuthToken,
+				})
+			}
+			if len(upstreams) > 0 {
+				log.Printf("client.upstreams is empty, fallback to routes for managed upstream connections")
+			}
+		}
+
+		for _, upstream := range upstreams {
 			if upstream.TargetID == "" || upstream.URL == "" {
 				log.Printf("skip invalid upstream: target_id/url required")
 				continue

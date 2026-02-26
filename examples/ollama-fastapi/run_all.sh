@@ -12,9 +12,74 @@ fi
 
 read_cfg() {
   /usr/bin/python3 - "$CONFIG_PATH" "$1" <<'PY'
-import json,sys
+import json,re,sys
 from pathlib import Path
-cfg = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+
+def load_json5(path: str):
+  text = Path(path).read_text(encoding='utf-8')
+  out = []
+  i = 0
+  in_str = False
+  quote = ''
+  escaped = False
+  in_line_comment = False
+  in_block_comment = False
+
+  while i < len(text):
+    ch = text[i]
+    nxt = text[i + 1] if i + 1 < len(text) else ''
+
+    if in_line_comment:
+      if ch == '\n':
+        in_line_comment = False
+        out.append(ch)
+      i += 1
+      continue
+
+    if in_block_comment:
+      if ch == '*' and nxt == '/':
+        in_block_comment = False
+        i += 2
+        continue
+      i += 1
+      continue
+
+    if in_str:
+      out.append(ch)
+      if escaped:
+        escaped = False
+      elif ch == '\\':
+        escaped = True
+      elif ch == quote:
+        in_str = False
+      i += 1
+      continue
+
+    if ch == '/' and nxt == '/':
+      in_line_comment = True
+      i += 2
+      continue
+
+    if ch == '/' and nxt == '*':
+      in_block_comment = True
+      i += 2
+      continue
+
+    if ch in ('"', "'"):
+      in_str = True
+      quote = ch
+      out.append(ch)
+      i += 1
+      continue
+
+    out.append(ch)
+    i += 1
+
+  cleaned = ''.join(out)
+  cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)
+  return json.loads(cleaned)
+
+cfg = load_json5(sys.argv[1])
 key = sys.argv[2]
 obj = cfg
 for part in key.split('.'):
@@ -39,10 +104,74 @@ SVC_B_CONCURRENCY="$(read_cfg services.1.max_concurrency)"
 PANEL_PORT="$(read_cfg panel.port)"
 PANEL_DEFAULT_API_BASE="$(read_cfg panel.defaultApiBase)"
 PANEL_DEFAULT_WS="$(/usr/bin/python3 - "$CONFIG_PATH" <<'PY'
-import json,sys
+import json,re,sys
 from pathlib import Path
 
-cfg = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+def load_json5(path: str):
+  text = Path(path).read_text(encoding='utf-8')
+  out = []
+  i = 0
+  in_str = False
+  quote = ''
+  escaped = False
+  in_line_comment = False
+  in_block_comment = False
+
+  while i < len(text):
+    ch = text[i]
+    nxt = text[i + 1] if i + 1 < len(text) else ''
+
+    if in_line_comment:
+      if ch == '\n':
+        in_line_comment = False
+        out.append(ch)
+      i += 1
+      continue
+
+    if in_block_comment:
+      if ch == '*' and nxt == '/':
+        in_block_comment = False
+        i += 2
+        continue
+      i += 1
+      continue
+
+    if in_str:
+      out.append(ch)
+      if escaped:
+        escaped = False
+      elif ch == '\\':
+        escaped = True
+      elif ch == quote:
+        in_str = False
+      i += 1
+      continue
+
+    if ch == '/' and nxt == '/':
+      in_line_comment = True
+      i += 2
+      continue
+
+    if ch == '/' and nxt == '*':
+      in_block_comment = True
+      i += 2
+      continue
+
+    if ch in ('"', "'"):
+      in_str = True
+      quote = ch
+      out.append(ch)
+      i += 1
+      continue
+
+    out.append(ch)
+    i += 1
+
+  cleaned = ''.join(out)
+  cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)
+  return json.loads(cleaned)
+
+cfg = load_json5(sys.argv[1])
 server = cfg.get('server', {})
 listen_addr = str(server.get('listen_addr', '')).strip()
 panel_path = str(server.get('panel_path', '/ws/panel')).strip() or '/ws/panel'
@@ -62,10 +191,75 @@ print(f"ws://{listen_addr}{panel_path}")
 PY
   )"
 PANEL_TARGETS_JSON="$(/usr/bin/python3 - "$CONFIG_PATH" <<'PY'
-import json,sys
+import json,re,sys
 from urllib.parse import urlparse
 from pathlib import Path
-cfg = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+
+def load_json5(path: str):
+  text = Path(path).read_text(encoding='utf-8')
+  out = []
+  i = 0
+  in_str = False
+  quote = ''
+  escaped = False
+  in_line_comment = False
+  in_block_comment = False
+
+  while i < len(text):
+    ch = text[i]
+    nxt = text[i + 1] if i + 1 < len(text) else ''
+
+    if in_line_comment:
+      if ch == '\n':
+        in_line_comment = False
+        out.append(ch)
+      i += 1
+      continue
+
+    if in_block_comment:
+      if ch == '*' and nxt == '/':
+        in_block_comment = False
+        i += 2
+        continue
+      i += 1
+      continue
+
+    if in_str:
+      out.append(ch)
+      if escaped:
+        escaped = False
+      elif ch == '\\':
+        escaped = True
+      elif ch == quote:
+        in_str = False
+      i += 1
+      continue
+
+    if ch == '/' and nxt == '/':
+      in_line_comment = True
+      i += 2
+      continue
+
+    if ch == '/' and nxt == '*':
+      in_block_comment = True
+      i += 2
+      continue
+
+    if ch in ('"', "'"):
+      in_str = True
+      quote = ch
+      out.append(ch)
+      i += 1
+      continue
+
+    out.append(ch)
+    i += 1
+
+  cleaned = ''.join(out)
+  cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)
+  return json.loads(cleaned)
+
+cfg = load_json5(sys.argv[1])
 
 def ws_to_http_base(raw_url: str) -> str:
   parsed = urlparse(raw_url)

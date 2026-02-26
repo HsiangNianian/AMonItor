@@ -30,6 +30,8 @@ go run ./cmd/agent \
 
 参考 `config.example.json`：
 
+- 配置解析支持 JSON5 风格注释（`//`、`/* ... */`）与尾逗号。
+
 - `server`：Agent 作为 WS 服务端时的配置
   - `enabled`：是否启用服务端模式
   - `listen_addr` 或 `host+port`
