@@ -15,4 +15,11 @@ coverage/
 # IDE
 .vscode/
 
+# Example frontend deps
+examples/ollama-fastapi/panel/node_modules/
+
+# Example generated config
+examples/.generated.scale.config.json
+
 PLAN.md
+amonitor-agent*

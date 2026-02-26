@@ -1,0 +1,37 @@
+{
+  "agent": {
+    "enabled": false,
+    "panel_ws": "ws://127.0.0.1:8080/ws/panel",
+    "targets": {
+      "ollama-svc-a": {
+        "ws": "ws://127.0.0.1:8011/ws/monitor",
+        "api_base": "http://127.0.0.1:8011"
+      },
+      "ollama-svc-b": {
+        "ws": "ws://127.0.0.1:8012/ws/monitor",
+        "api_base": "http://127.0.0.1:8012"
+      }
+    }
+  },
+  "ollama": {
+    "base_url": "http://127.0.0.1:11434",
+    "model": "qwen3:0.6b"
+  },
+  "services": [
+    {
+      "name": "ollama-svc-a",
+      "port": 8011,
+      "max_concurrency": 1
+    },
+    {
+      "name": "ollama-svc-b",
+      "port": 8012,
+      "max_concurrency": 1
+    }
+  ],
+  "panel": {
+    "port": 5174,
+    "defaultWs": "ws://127.0.0.1:8011/ws/monitor",
+    "defaultApiBase": "http://127.0.0.1:8011"
+  }
+}

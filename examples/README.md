@@ -19,6 +19,7 @@
 - `gen_scale_config.py`：根据参数动态生成配置
 - `panel_demo.py`：面板模拟客户端（连接 Agent、发送 action、打印消息）
 - `sdk_demo.py`：SDK 示例服务（接 action、发 heartbeat）
+- `ollama-fastapi/`：Ollama + 双 FastAPI + TS 实时监控面板示例
 
 ## 一键运行
 
@@ -50,6 +51,12 @@ make demo-stress
 
 ```bash
 SDK_COUNT=20 make demo-scale
+```
+
+Ollama 双服务 + TS 面板示例：
+
+```bash
+make demo-ollama
 ```
 
 ## 配置方式

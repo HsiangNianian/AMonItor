@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: proto lint test test-dedupe demo demo-multi demo-stress demo-scale build-agent build-sdk release-dry-run
+.PHONY: proto lint test test-dedupe demo demo-multi demo-stress demo-scale demo-ollama build-agent build-sdk release-dry-run
 
 proto:
 	@echo "[proto] place generator command in scripts/gen_proto.sh"
@@ -38,6 +38,9 @@ demo-stress:
 
 demo-scale:
 	@bash examples/run.scale.sh
+
+demo-ollama:
+	@bash examples/ollama-fastapi/run_all.sh
 
 build-agent:
 	@mkdir -p dist

@@ -103,6 +103,7 @@ make demo
 make demo-multi
 make demo-stress
 SDK_COUNT=20 make demo-scale
+make demo-ollama
 ```
 
 或直接运行：
@@ -112,6 +113,7 @@ SDK_COUNT=20 make demo-scale
 ./examples/run.multi.sh
 ./examples/run.stress.sh
 ./examples/run.scale.sh
+bash examples/ollama-fastapi/run_all.sh
 ```
 
 配置文件在 `examples/config.json`，多实例演示使用 `examples/config.multi.json`，压力演示使用 `examples/config.stress.json`。
@@ -125,6 +127,7 @@ SDK_COUNT=20 make demo-scale
 - Ubuntu 从零部署：[docs/ubuntu-from-scratch.md](docs/ubuntu-from-scratch.md)
 - SDK 规范：[python-sdk/README.md](python-sdk/README.md)
 - 示例说明：[examples/README.md](examples/README.md)
+- Ollama 示例：[examples/ollama-fastapi/README.md](examples/ollama-fastapi/README.md)
 
 ## 当前状态
 
