@@ -32,6 +32,8 @@ ollama pull qwen3:0.6b
 bash examples/ollama-fastapi/run_all.sh
 ```
 
+说明：脚本会直接复用 `python-sdk` 的 `uv` 项目环境运行 Python 服务，不会在 `examples/ollama-fastapi` 目录创建新的虚拟环境。
+
 启动后可访问：
 
 - 服务 A 文档：`http://127.0.0.1:8011/docs`
@@ -82,8 +84,8 @@ curl -X POST http://127.0.0.1:8011/api/action \
 
 ## 面板交互
 
-1. 在面板输入 WS 地址（默认来自配置）
-2. 也可以通过“选择目标服务”下拉自动填充 `target_id/target_url/apiBase`
+1. 在面板输入 Agent WS 地址（默认来自 `agent.panel_ws`）
+2. 通过“选择目标服务”下拉自动填充 `target_id/target_url/apiBase`
 3. 点击“连接”
 4. 右侧实时展示：
    - Token 字符总数
@@ -94,37 +96,36 @@ curl -X POST http://127.0.0.1:8011/api/action \
 6. 在 Prompt 区域输入文本，点击“调用 `/api/generate`”直接触发模型生成
 7. 生成结果会显示在“模型输出”，日志会记录本次 `token_chars`
 
-WS 地址示例：
+WS 地址示例（面板固定连接 Agent）：
 
-- `ws://127.0.0.1:8011/ws/monitor`
-- `ws://127.0.0.1:8012/ws/monitor`
+- `ws://127.0.0.1:8080/ws/panel`
 
 ## 配置
 
 编辑 `config.json` 可修改：
 
-- `agent.enabled`：是否启用 Agent 拓扑（仅用于配置语义）
 - `agent.panel_ws`：面板连接 Agent 的 WS 地址（例如内网机器）
 - `agent.targets`：服务名到目标 `target_url` 映射（给 action 转发使用）
 - Ollama 地址与模型
 - 两个服务端口
 - 并发数
-- 面板端口、默认 WS、默认 API Base
+- 面板端口、默认 API Base
 
-当 `agent.enabled=true` 时，`run_all.sh` 会自动把面板默认 WS 覆盖为 `agent.panel_ws`，不需要手动再改 `panel.defaultWs`。
+`run_all.sh` 始终使用 `agent.panel_ws` 作为面板默认 WS。
 
 ### Agent 在内网其他机器时
 
 如果你的 Agent 二进制部署在别的机器：
 
-1. 将 `panel.defaultWs` 改为 `agent.panel_ws`
-2. 面板勾选“通过 Agent 转发”
-3. 填写 `target_id` 与 `target_url`（可直接用 `agent.targets` 的映射值）
-4. `API Base` 填真实 Python 服务地址（用于 `/api/generate`）
+1. 配置 `agent.panel_ws` 为 Agent 的对外地址
+2. 填写 `target_id` 与 `target_url`（可直接用 `agent.targets` 的映射值）
+3. `API Base` 填真实 Python 服务地址（用于 `/api/generate`）
+
+注意：选择目标服务只会自动填写 `target_id/target_url/apiBase`，不会覆盖你已经填写的 Agent `WS` 地址。
 
 示例：
 
-- `panel.defaultWs = ws://10.0.0.9:8080/ws/panel`
+- `agent.panel_ws = ws://10.0.0.9:8080/ws/panel`
 - `actionTargetId = ollama-svc-a`
 - `actionTargetUrl = ws://10.0.0.21:8011/ws/monitor`
 - `apiBaseUrl = http://10.0.0.21:8011`
@@ -132,3 +133,20 @@ WS 地址示例：
 ## 停止
 
 在启动终端按 `Ctrl + C`，会自动停止全部子进程。
+
+## 项目根目录启动 Agent
+
+源码运行：
+
+```bash
+cd /home/hsiangnianian/GitProject/HsiangNianian/AMonItor
+go run ./agent/cmd/agent
+```
+
+编译后运行：
+
+```bash
+cd /home/hsiangnianian/GitProject/HsiangNianian/AMonItor
+go build -o amonitor-agent ./agent/cmd/agent
+./amonitor-agent
+```

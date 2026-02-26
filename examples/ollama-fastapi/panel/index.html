@@ -21,7 +21,7 @@
     <h2>Ollama 实时监控面板</h2>
 
     <div class="row">
-      <input id="wsUrl" style="min-width:420px" value="ws://127.0.0.1:8011/ws/monitor" />
+      <input id="wsUrl" style="min-width:420px" value="ws://127.0.0.1:8080/ws/panel" />
       <input id="apiBaseUrl" style="min-width:320px" placeholder="API Base，例如 http://127.0.0.1:8011" />
       <button id="connectBtn">连接</button>
       <button id="disconnectBtn">断开</button>
@@ -37,12 +37,8 @@
         <option value="set_max_concurrency">set_max_concurrency</option>
       </select>
       <input id="actionValue" placeholder="action value（例如 2）" />
-      <input id="actionTargetId" placeholder="target_id（走Agent时必填）" />
-      <input id="actionTargetUrl" placeholder="target_url（走Agent时必填）" style="min-width:320px" />
-      <label style="display:flex; align-items:center; gap:6px;">
-        <input id="useAgentEnvelope" type="checkbox" />
-        通过 Agent 转发
-      </label>
+      <input id="actionTargetId" placeholder="target_id（必填）" />
+      <input id="actionTargetUrl" placeholder="target_url（必填）" style="min-width:320px" />
       <button id="sendActionBtn">发送 Action</button>
     </div>
 

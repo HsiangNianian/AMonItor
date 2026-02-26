@@ -24,14 +24,29 @@ AMonitor 是一个 Monorepo 监控系统，包含：
 
 ## 快速使用
 
-1. 启动 Agent
+1. 启动 Agent（源码运行）
 
 ```bash
-cd agent
-go run ./cmd/agent
+cd /home/hsiangnianian/GitProject/HsiangNianian/AMonItor
+go run ./agent/cmd/agent
 ```
 
-2. 启动 Python SDK 示例服务
+使用配置文件启动（支持 server/client 双模式、路由与多上游）：
+
+```bash
+cd /home/hsiangnianian/GitProject/HsiangNianian/AMonItor
+go run ./agent/cmd/agent --config ./agent/config.example.json
+```
+
+或编译后二进制运行：
+
+```bash
+cd /home/hsiangnianian/GitProject/HsiangNianian/AMonItor
+go build -o amonitor-agent ./agent/cmd/agent
+./amonitor-agent
+```
+
+1. 启动 Python SDK 示例服务
 
 ```bash
 cd python-sdk
@@ -39,21 +54,21 @@ uv sync
 uv run python -m amonitor_sdk.example
 ```
 
-3. 启动面板模拟客户端（会自动下发 action 并打印回包）
+1. 启动面板模拟客户端（会自动下发 action 并打印回包）
 
 ```bash
 cd python-sdk
 uv run python ../scripts/panel_sim.py
 ```
 
-4. 一次性发送 action 并等待 ACK
+1. 一次性发送 action 并等待 ACK
 
 ```bash
 cd python-sdk
 uv run python ../scripts/send_action_once.py
 ```
 
-5. 验证幂等（同一 `msg_id` 发送两次）
+1. 验证幂等（同一 `msg_id` 发送两次）
 
 ```bash
 cd python-sdk

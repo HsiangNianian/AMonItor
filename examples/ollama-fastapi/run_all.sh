@@ -28,7 +28,6 @@ PY
 
 OLLAMA_BASE_URL="$(read_cfg ollama.base_url)"
 OLLAMA_MODEL="$(read_cfg ollama.model)"
-AGENT_ENABLED="$(read_cfg agent.enabled)"
 AGENT_PANEL_WS="$(read_cfg agent.panel_ws)"
 SVC_A_NAME="$(read_cfg services.0.name)"
 SVC_A_PORT="$(read_cfg services.0.port)"
@@ -37,7 +36,6 @@ SVC_B_NAME="$(read_cfg services.1.name)"
 SVC_B_PORT="$(read_cfg services.1.port)"
 SVC_B_CONCURRENCY="$(read_cfg services.1.max_concurrency)"
 PANEL_PORT="$(read_cfg panel.port)"
-PANEL_DEFAULT_WS="$(read_cfg panel.defaultWs)"
 PANEL_DEFAULT_API_BASE="$(read_cfg panel.defaultApiBase)"
 PANEL_TARGETS_JSON="$(/usr/bin/python3 - "$CONFIG_PATH" <<'PY'
 import json,sys
@@ -58,21 +56,22 @@ print(json.dumps(out, ensure_ascii=False))
 PY
   )"
 
-export PANEL_DEFAULT_WS
-export VITE_PANEL_DEFAULT_WS="$PANEL_DEFAULT_WS"
 export VITE_PANEL_DEFAULT_API_BASE="$PANEL_DEFAULT_API_BASE"
 export VITE_PANEL_TARGETS_JSON="$PANEL_TARGETS_JSON"
 
-if [ "$AGENT_ENABLED" = "True" ] || [ "$AGENT_ENABLED" = "true" ]; then
-  if [ -n "$AGENT_PANEL_WS" ]; then
-    PANEL_DEFAULT_WS="$AGENT_PANEL_WS"
-    export PANEL_DEFAULT_WS
-    export VITE_PANEL_DEFAULT_WS="$PANEL_DEFAULT_WS"
-  fi
+if [ -z "$AGENT_PANEL_WS" ]; then
+  echo "config error: agent.panel_ws is required"
+  exit 1
 fi
+PANEL_DEFAULT_WS="$AGENT_PANEL_WS"
+export PANEL_DEFAULT_WS
+export VITE_PANEL_DEFAULT_WS="$PANEL_DEFAULT_WS"
 
 unset ALL_PROXY all_proxy HTTP_PROXY HTTPS_PROXY http_proxy https_proxy
 export NO_PROXY=127.0.0.1,localhost
+unset VIRTUAL_ENV
+
+UV_PY_RUN=(uv run --project "$ROOT_DIR/python-sdk" --with httpx)
 
 PIDS=()
 cleanup() {
@@ -84,25 +83,35 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "[run_all] prepare python dependencies"
+echo "[run_all] use python-sdk uv project env"
 cd "$EXAMPLE_DIR"
-uv sync
 
 echo "[run_all] start service-a on :$SVC_A_PORT"
 OLLAMA_BASE_URL="$OLLAMA_BASE_URL" OLLAMA_MODEL="$OLLAMA_MODEL" MAX_CONCURRENCY="$SVC_A_CONCURRENCY" \
-  uv run uvicorn service_a:app --host 0.0.0.0 --port "$SVC_A_PORT" &
+  "${UV_PY_RUN[@]}" uvicorn service_a:app --host 0.0.0.0 --port "$SVC_A_PORT" &
 PIDS+=("$!")
 
 echo "[run_all] start service-b on :$SVC_B_PORT"
 OLLAMA_BASE_URL="$OLLAMA_BASE_URL" OLLAMA_MODEL="$OLLAMA_MODEL" MAX_CONCURRENCY="$SVC_B_CONCURRENCY" \
-  uv run uvicorn service_b:app --host 0.0.0.0 --port "$SVC_B_PORT" &
+  "${UV_PY_RUN[@]}" uvicorn service_b:app --host 0.0.0.0 --port "$SVC_B_PORT" &
 PIDS+=("$!")
 
 sleep 1
 
+echo "[run_all] check service health"
+if ! curl -fsS "http://127.0.0.1:$SVC_A_PORT/healthz" >/dev/null; then
+  echo "service-a health check failed"
+  exit 1
+fi
+if ! curl -fsS "http://127.0.0.1:$SVC_B_PORT/healthz" >/dev/null; then
+  echo "service-b health check failed"
+  exit 1
+fi
+
 echo "[run_all] prepare panel dependencies"
 cd "$EXAMPLE_DIR/panel"
-npm install --no-package-lock --registry=https://registry.npmmirror.com >/dev/null
+rm -rf node_modules
+npm install --no-package-lock --legacy-peer-deps --registry=https://registry.npmmirror.com >/dev/null
 
 echo "[run_all] panel default ws: $PANEL_DEFAULT_WS"
 echo "[run_all] panel default api: $PANEL_DEFAULT_API_BASE"

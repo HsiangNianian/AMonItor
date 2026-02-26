@@ -1,6 +1,5 @@
 {
   "agent": {
-    "enabled": false,
     "panel_ws": "ws://127.0.0.1:8080/ws/panel",
     "targets": {
       "ollama-svc-a": {
@@ -31,7 +30,6 @@
   ],
   "panel": {
     "port": 5174,
-    "defaultWs": "ws://127.0.0.1:8011/ws/monitor",
     "defaultApiBase": "http://127.0.0.1:8011"
   }
 }

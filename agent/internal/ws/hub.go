@@ -37,6 +37,9 @@ type Hub struct {
 
 	sdkMu sync.RWMutex
 	sdks  map[string]*clientConn
+
+	routeMu        sync.RWMutex
+	routeAuthToken map[string]string
 }
 
 func NewHub(st store.Store, authToken, sdkToken string) *Hub {
@@ -47,9 +50,62 @@ func NewHub(st store.Store, authToken, sdkToken string) *Hub {
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(_ *http.Request) bool { return true },
 		},
-		panels: make(map[*clientConn]struct{}),
-		sdks:   make(map[string]*clientConn),
+		panels:         make(map[*clientConn]struct{}),
+		sdks:           make(map[string]*clientConn),
+		routeAuthToken: make(map[string]string),
 	}
+}
+
+func (h *Hub) AddRoute(ctx context.Context, targetID, targetURL, authToken string) error {
+	if targetID == "" || targetURL == "" {
+		return errors.New("target_id and target_url are required")
+	}
+	if err := h.store.SetRoute(ctx, targetID, targetURL); err != nil {
+		return err
+	}
+	h.routeMu.Lock()
+	h.routeAuthToken[targetID] = authToken
+	h.routeMu.Unlock()
+	return nil
+}
+
+func (h *Hub) StartManagedUpstream(ctx context.Context, targetID, targetURL, authToken string, reconnectInterval time.Duration) {
+	if reconnectInterval <= 0 {
+		reconnectInterval = 5 * time.Second
+	}
+
+	go func() {
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+
+			if err := h.AddRoute(ctx, targetID, targetURL, authToken); err != nil {
+				log.Printf("set route failed for %s: %v", targetID, err)
+				time.Sleep(reconnectInterval)
+				continue
+			}
+
+			if _, err := h.ensureSDKConn(ctx, targetID, targetURL, authToken); err != nil {
+				log.Printf("connect upstream failed for %s: %v", targetID, err)
+				time.Sleep(reconnectInterval)
+				continue
+			}
+
+			for {
+				if ctx.Err() != nil {
+					return
+				}
+				time.Sleep(reconnectInterval)
+				h.sdkMu.RLock()
+				_, connected := h.sdks[targetID]
+				h.sdkMu.RUnlock()
+				if !connected {
+					break
+				}
+			}
+		}
+	}()
 }
 
 func (h *Hub) HandlePanel(w http.ResponseWriter, r *http.Request) {
@@ -145,7 +201,7 @@ func (h *Hub) handleAction(ctx context.Context, env protocol.Envelope) error {
 		return errors.New("missing target url")
 	}
 
-	sdkConn, err := h.ensureSDKConn(ctx, env.TargetID, targetURL)
+	sdkConn, err := h.ensureSDKConn(ctx, env.TargetID, targetURL, h.getRouteAuthToken(env.TargetID))
 	if err != nil {
 		return err
 	}
@@ -159,7 +215,7 @@ func (h *Hub) handleAction(ctx context.Context, env protocol.Envelope) error {
 	return nil
 }
 
-func (h *Hub) ensureSDKConn(ctx context.Context, targetID, targetURL string) (*clientConn, error) {
+func (h *Hub) ensureSDKConn(ctx context.Context, targetID, targetURL, authToken string) (*clientConn, error) {
 	h.sdkMu.RLock()
 	if conn, ok := h.sdks[targetID]; ok {
 		h.sdkMu.RUnlock()
@@ -168,8 +224,11 @@ func (h *Hub) ensureSDKConn(ctx context.Context, targetID, targetURL string) (*c
 	h.sdkMu.RUnlock()
 
 	header := http.Header{}
-	if h.sdkToken != "" {
-		header.Set("Authorization", "Bearer "+h.sdkToken)
+	if authToken == "" {
+		authToken = h.sdkToken
+	}
+	if authToken != "" {
+		header.Set("Authorization", "Bearer "+authToken)
 	}
 	conn, _, err := websocket.DefaultDialer.DialContext(ctx, targetURL, header)
 	if err != nil {
@@ -183,6 +242,9 @@ func (h *Hub) ensureSDKConn(ctx context.Context, targetID, targetURL string) (*c
 
 	if targetID != "" {
 		_ = h.store.SetRoute(ctx, targetID, targetURL)
+		h.routeMu.Lock()
+		h.routeAuthToken[targetID] = authToken
+		h.routeMu.Unlock()
 	}
 
 	go h.readSDK(targetID, client)
@@ -230,4 +292,10 @@ func (h *Hub) broadcast(env protocol.Envelope) {
 func mustJSON(v any) json.RawMessage {
 	b, _ := json.Marshal(v)
 	return b
+}
+
+func (h *Hub) getRouteAuthToken(targetID string) string {
+	h.routeMu.RLock()
+	defer h.routeMu.RUnlock()
+	return h.routeAuthToken[targetID]
 }

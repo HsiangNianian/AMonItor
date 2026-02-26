@@ -19,7 +19,6 @@ const actionName = document.getElementById("actionName") as HTMLSelectElement;
 const actionValue = document.getElementById("actionValue") as HTMLInputElement;
 const actionTargetId = document.getElementById("actionTargetId") as HTMLInputElement;
 const actionTargetUrl = document.getElementById("actionTargetUrl") as HTMLInputElement;
-const useAgentEnvelope = document.getElementById("useAgentEnvelope") as HTMLInputElement;
 const promptInput = document.getElementById("promptInput") as HTMLTextAreaElement;
 const statusEl = document.getElementById("status") as HTMLSpanElement;
 const logBox = document.getElementById("logBox") as HTMLPreElement;
@@ -76,9 +75,6 @@ function initTargetSelect(): void {
     }
     actionTargetId.value = selected.target_id;
     actionTargetUrl.value = selected.target_url;
-    if (selected.target_url) {
-      wsUrlInput.value = selected.target_url;
-    }
     if (selected.api_base) {
       apiBaseUrlInput.value = selected.api_base;
     }
@@ -178,33 +174,25 @@ function sendAction(): void {
     value = parsed;
   }
 
-  let message: Record<string, unknown>;
-  if (useAgentEnvelope.checked) {
-    const targetId = actionTargetId.value.trim();
-    const targetUrl = actionTargetUrl.value.trim();
-    if (!targetId || !targetUrl) {
-      appendLog("通过 Agent 转发时，target_id 和 target_url 必填");
-      return;
-    }
-    message = {
-      msg_id: crypto.randomUUID(),
-      trace_id: crypto.randomUUID(),
-      type: "action",
-      target_id: targetId,
-      timestamp: Date.now(),
-      payload: {
-        action: actionName.value,
-        params: { value },
-        target_url: targetUrl,
-      },
-    };
-  } else {
-    message = {
-      type: "action",
-      action: actionName.value,
-      value,
-    };
+  const targetId = actionTargetId.value.trim();
+  const targetUrl = actionTargetUrl.value.trim();
+  if (!targetId || !targetUrl) {
+    appendLog("target_id 和 target_url 必填");
+    return;
   }
+
+  const message: Record<string, unknown> = {
+    msg_id: crypto.randomUUID(),
+    trace_id: crypto.randomUUID(),
+    type: "action",
+    target_id: targetId,
+    timestamp: Date.now(),
+    payload: {
+      action: actionName.value,
+      params: { value },
+      target_url: targetUrl,
+    },
+  };
   ws.send(JSON.stringify(message));
   appendLog(`发送 action: ${JSON.stringify(message)}`);
 }

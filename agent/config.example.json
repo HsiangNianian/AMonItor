@@ -1,0 +1,40 @@
+{
+  "server": {
+    "enabled": true,
+    "listen_addr": ":8080",
+    "panel_path": "/ws/panel",
+    "panel_auth_token": "",
+    "default_sdk_auth_token": ""
+  },
+  "store": {
+    "redis_addr": ""
+  },
+  "routes": [
+    {
+      "target_id": "ollama-svc-a",
+      "url": "ws://127.0.0.1:8011/ws/monitor",
+      "auth_token": ""
+    },
+    {
+      "target_id": "ollama-svc-b",
+      "url": "ws://127.0.0.1:8012/ws/monitor",
+      "auth_token": ""
+    }
+  ],
+  "client": {
+    "enabled": false,
+    "reconnect_interval_seconds": 5,
+    "upstreams": [
+      {
+        "target_id": "ollama-svc-a",
+        "url": "ws://127.0.0.1:8011/ws/monitor",
+        "auth_token": ""
+      },
+      {
+        "target_id": "ollama-svc-b",
+        "url": "ws://127.0.0.1:8012/ws/monitor",
+        "auth_token": ""
+      }
+    ]
+  }
+}

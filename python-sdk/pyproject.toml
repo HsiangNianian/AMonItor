@@ -5,6 +5,11 @@ description = "AMonitor Python SDK"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+  "fastapi>=0.133.1",
+  "httpx>=0.28.1",
+  "pydantic>=2.12.5",
+  "python-multipart>=0.0.22",
+  "uvicorn[standard]>=0.41.0",
   "websockets>=13.1",
 ]
 

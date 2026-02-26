@@ -100,6 +100,22 @@ async def broadcast_metrics(state: RuntimeState) -> None:
     await safe_broadcast(state, {"type": "metrics", "payload": state.snapshot()})
 
 
+async def broadcast_heartbeat(state: RuntimeState) -> None:
+    await safe_broadcast(
+        state,
+        {
+            "type": "heartbeat",
+            "target_id": state.service_name,
+            "timestamp": int(time.time() * 1000),
+            "payload": {
+                "target_id": state.service_name,
+                "status": "up",
+                "metrics": state.snapshot(),
+            },
+        },
+    )
+
+
 async def apply_action(state: RuntimeState, action: str, value: Any) -> dict[str, Any]:
     async with state.lock:
         if action == "reset_metrics":
@@ -197,6 +213,7 @@ def create_app(service_name: str) -> FastAPI:
                     state.gpu_utilization = gpu
                     state.updated_at_ms = int(time.time() * 1000)
                 await broadcast_metrics(state)
+                await broadcast_heartbeat(state)
                 try:
                     await asyncio.wait_for(stop_event.wait(), timeout=2)
                 except asyncio.TimeoutError:
@@ -293,19 +310,47 @@ def create_app(service_name: str) -> FastAPI:
                     continue
 
                 if message.get("type") == "action":
-                    action_name = str(message.get("action", ""))
-                    action_value = message.get("value")
+                    action_name = ""
+                    action_value: Any = None
+                    action_msg_id = str(message.get("msg_id", ""))
+
+                    payload = message.get("payload")
+                    if isinstance(payload, dict) and "action" in payload:
+                        action_name = str(payload.get("action", ""))
+                        params = payload.get("params")
+                        if isinstance(params, dict) and "value" in params:
+                            action_value = params.get("value")
+                        else:
+                            action_value = params
+                    else:
+                        action_name = str(message.get("action", ""))
+                        action_value = message.get("value")
+
                     try:
                         result = await apply_action(state, action_name, action_value)
-                        await websocket.send_json(
-                            {
-                                "type": "ack",
-                                "payload": {
-                                    "action": action_name,
-                                    **result,
-                                },
-                            }
-                        )
+                        if action_msg_id:
+                            await websocket.send_json(
+                                {
+                                    "type": "action_ack",
+                                    "target_id": state.service_name,
+                                    "timestamp": int(time.time() * 1000),
+                                    "payload": {
+                                        "action_msg_id": action_msg_id,
+                                        "success": bool(result.get("ok", False)),
+                                        "message": str(result.get("message", "")),
+                                    },
+                                }
+                            )
+                        else:
+                            await websocket.send_json(
+                                {
+                                    "type": "ack",
+                                    "payload": {
+                                        "action": action_name,
+                                        **result,
+                                    },
+                                }
+                            )
                     except HTTPException as exc:
                         await websocket.send_json(
                             {
