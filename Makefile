@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: proto lint test test-dedupe demo demo-multi build-agent build-sdk release-dry-run
+.PHONY: proto lint test test-dedupe demo demo-multi demo-stress demo-scale build-agent build-sdk release-dry-run
 
 proto:
 	@echo "[proto] place generator command in scripts/gen_proto.sh"
@@ -10,7 +10,7 @@ lint:
 	@echo "[lint] go fmt check"
 	@cd agent && gofmt -w $$(find . -name '*.go')
 	@echo "[lint] python ruff"
-	@cd python-sdk && uv run --with dev ruff check src
+	@cd python-sdk && uvx ruff check src
 
 test:
 	@echo "[test] go"
@@ -32,6 +32,12 @@ demo:
 
 demo-multi:
 	@bash examples/run.multi.sh
+
+demo-stress:
+	@bash examples/run.stress.sh
+
+demo-scale:
+	@bash examples/run.scale.sh
 
 build-agent:
 	@mkdir -p dist

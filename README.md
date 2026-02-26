@@ -101,6 +101,8 @@ RUN_E2E=1 make test
 ```bash
 make demo
 make demo-multi
+make demo-stress
+SDK_COUNT=20 make demo-scale
 ```
 
 或直接运行：
@@ -108,9 +110,11 @@ make demo-multi
 ```bash
 ./examples/run.sh
 ./examples/run.multi.sh
+./examples/run.stress.sh
+./examples/run.scale.sh
 ```
 
-配置文件在 `examples/config.json`，多实例演示使用 `examples/config.multi.json`。
+配置文件在 `examples/config.json`，多实例演示使用 `examples/config.multi.json`，压力演示使用 `examples/config.stress.json`。
 
 ## 文档索引
 
