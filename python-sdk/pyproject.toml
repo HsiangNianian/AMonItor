@@ -9,6 +9,8 @@ dependencies = [
   "httpx>=0.28.1",
   "pydantic>=2.12.5",
   "python-multipart>=0.0.22",
+  "python-socks>=2.8.1",
+  "textual>=8.0.0",
   "uvicorn[standard]>=0.41.0",
   "websockets>=13.1",
 ]
